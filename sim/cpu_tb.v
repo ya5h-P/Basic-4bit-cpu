@@ -11,74 +11,100 @@ cpu_top CPU (
     .reset(reset)
 );
 
-// Clock generation - toggles every 5ns (100MHz clock)
+// Clock generation - 10ns period (100MHz)
 always begin
     #5 clk = ~clk;
 end
 
 // Test sequence
 initial begin
-    // Initialize signals
+    // Initialize
     clk = 0;
     reset = 1;
     
     // Display header
     $display("========================================");
-    $display("Starting CPU Simulation");
-    $display("========================================");
-    
-    // Hold reset for 2 clock cycles
-    #10;
-    reset = 0;
-    $display("Reset released at time %0t", $time);
-    
-    // Run for several clock cycles to execute instructions
-    #100;
-    
-    // Display register values
-    $display("\n========================================");
-    $display("Register Values After Execution:");
-    $display("========================================");
-    $display("R0 = %b (%d)", CPU.REG_BANK.regs[0], CPU.REG_BANK.regs[0]);
-    $display("R1 = %b (%d)", CPU.REG_BANK.regs[1], CPU.REG_BANK.regs[1]);
-    $display("R2 = %b (%d)", CPU.REG_BANK.regs[2], CPU.REG_BANK.regs[2]);
-    $display("R3 = %b (%d)", CPU.REG_BANK.regs[3], CPU.REG_BANK.regs[3]);
+    $display("  Enhanced 4-bit CPU Simulation");
+    $display("  Features: LDI, LDR, STR, CALL, RET");
     $display("========================================\n");
     
-    // End simulation
+    // Hold reset for 2 clock cycles
+    #20;
+    reset = 0;
+    $display("Time=%0t: Reset released\n", $time);
+    
+    // Let the program run
+    #500;  // Run for 500ns
+    
+    // Display final state
+    $display("\n========================================");
+    $display("  Final CPU State");
+    $display("========================================");
+    $display("Registers:");
+    $display("  R0 = %b (%d)", CPU.REG_BANK.regs[0], CPU.REG_BANK.regs[0]);
+    $display("  R1 = %b (%d)", CPU.REG_BANK.regs[1], CPU.REG_BANK.regs[1]);
+    $display("  R2 = %b (%d)", CPU.REG_BANK.regs[2], CPU.REG_BANK.regs[2]);
+    $display("  R3 = %b (%d)", CPU.REG_BANK.regs[3], CPU.REG_BANK.regs[3]);
+    
+    $display("\nData Memory (first 10 locations):");
+    $display("  Mem[0] = %d", CPU.DMEM.mem[0]);
+    $display("  Mem[1] = %d", CPU.DMEM.mem[1]);
+    $display("  Mem[2] = %d", CPU.DMEM.mem[2]);
+    $display("  Mem[3] = %d", CPU.DMEM.mem[3]);
+    $display("  Mem[4] = %d", CPU.DMEM.mem[4]);
+    $display("  Mem[5] = %d", CPU.DMEM.mem[5]);
+    
+    $display("\nStack Info:");
+    $display("  Stack Pointer = %d", CPU.STACK.sp);
+    $display("  Overflow = %b, Underflow = %b", 
+             CPU.stack_overflow, CPU.stack_underflow);
+    
+    $display("\nProgram Counter:");
+    $display("  Final PC = %d", CPU.pc);
+    
+    $display("\n========================================");
+    $display("  Simulation Complete");
+    $display("========================================\n");
+    
     $finish;
 end
 
-// Monitor instruction execution (optional - helpful for debugging)
+// Monitor key signals during execution
 always @(posedge clk) begin
-    if (!reset) begin
-        $display("Time=%0t | PC=%d | Inst=%b | ALU_OP=%b | Dest=R%d | Src=R%d | Result=%d", 
-                 $time, CPU.pc, CPU.instruction, CPU.alu_op, 
-                 CPU.dest_reg, CPU.source_reg, CPU.alu_result);
+    if (!reset && !CPU.halt) begin
+        $display("T=%0t | PC=%3d | Inst=%b | Op=%b | D=R%d | S=R%d | ALU=%d | R0=%d R1=%d R2=%d R3=%d", 
+                 $time, 
+                 CPU.pc, 
+                 CPU.instruction,
+                 CPU.alu_op,
+                 CPU.dest_reg,
+                 CPU.source_reg,
+                 CPU.alu_result,
+                 CPU.REG_BANK.regs[0],
+                 CPU.REG_BANK.regs[1],
+                 CPU.REG_BANK.regs[2],
+                 CPU.REG_BANK.regs[3]);
     end
 end
 
+// Monitor special events
+always @(posedge clk) begin
+    if (CPU.push_stack)
+        $display(">>> CALL: Pushing PC+2=%d to stack", CPU.pc + 2);
+    
+    if (CPU.pop_stack)
+        $display(">>> RET: Popping address=%d from stack", CPU.stack_data_out);
+    
+    if (CPU.mem_we)
+        $display(">>> STR: Writing R%d=%d to Mem[%d]", 
+                 CPU.source_reg, CPU.reg_data_a, CPU.mem_addr);
+    
+    if (CPU.mem_to_reg)
+        $display(">>> LDR: Loading Mem[%d]=%d to R%d", 
+                 CPU.mem_addr, CPU.mem_read_data, CPU.dest_reg);
+    
+    if (CPU.halt)
+        $display(">>> HALT: CPU stopped at PC=%d", CPU.pc);
+end
+
 endmodule
-
-
-
-/*## **Example Test Program (`program.mem`):**
-
-Create this file in your project directory:
-```
-00000010
-00001000
-01010110
-10111100
-00000000
-00000000
-```
-
-**What this program does:**
-```
-Instruction 0: 00000010 = 000_00_01_0 → ADD R0, R1  (R0 = R0 + R1)
-Instruction 1: 00001000 = 000_01_00_0 → ADD R1, R0  (R1 = R1 + R0)
-Instruction 2: 01010110 = 010_10_11_0 → AND R2, R3  (R2 = R2 & R3)
-Instruction 3: 10111100 = 101_11_10_0 → NOT R3, R2  (R3 = ~R3)
-Instruction 4: 00000000 = 000_00_00_0 → ADD R0, R0  (R0 = R0 + R0)
-Instruction 5: 00000000 = ...*/
